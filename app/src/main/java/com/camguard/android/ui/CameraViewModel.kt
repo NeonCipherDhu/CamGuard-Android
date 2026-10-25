@@ -1,21 +1,21 @@
-package com.v380protect.android.ui
+package com.camguard.android.ui
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.v380protect.android.media.CameraStreamController
-import com.v380protect.android.model.CameraConfig
-import com.v380protect.android.model.CameraRepository
-import com.v380protect.android.model.PtzPreset
-import com.v380protect.android.protocol.DiscoveredCamera
-import com.v380protect.android.protocol.V380Discovery
+import com.camguard.android.media.CameraStreamController
+import com.camguard.android.model.CameraConfig
+import com.camguard.android.model.CameraRepository
+import com.camguard.android.model.PtzPreset
+import com.camguard.android.protocol.DiscoveredCamera
+import com.camguard.android.protocol.LanDiscovery
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-class V380ViewModel(application: Application) : AndroidViewModel(application) {
+class CameraViewModel(application: Application) : AndroidViewModel(application) {
     private val repo = CameraRepository(application)
 
     private val _cameras = MutableStateFlow<List<CameraConfig>>(emptyList())
@@ -247,7 +247,7 @@ class V380ViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val existingList = _cameras.value
-                val found = V380Discovery.discover(
+                val found = LanDiscovery.discover(
                     context = getApplication(),
                     timeoutSec = 2.2,
                     scanTcp8800 = true,
@@ -298,10 +298,10 @@ class V380ViewModel(application: Application) : AndroidViewModel(application) {
         val existing = _cameras.value.find {
             (disc.devId.isNotBlank() && it.deviceId == disc.devId) || it.ip == disc.ip
         }
-        val camId = existing?.camId ?: if (disc.devId.isNotBlank()) "v380_${disc.devId}" else "v380_${disc.ip.replace('.', '_')}"
+        val camId = existing?.camId ?: if (disc.devId.isNotBlank()) "cam_${disc.devId}" else "cam_${disc.ip.replace('.', '_')}"
         val finalName = customName.trim().ifBlank {
             disc.name.ifBlank {
-                if (disc.devId.isNotBlank()) "V380 (${disc.devId})" else "V380 (${disc.ip})"
+                if (disc.devId.isNotBlank()) "Camera (${disc.devId})" else "Camera (${disc.ip})"
             }
         }
         val username = if (disc.devId.isNotBlank()) disc.devId else "admin"

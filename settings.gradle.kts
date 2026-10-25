@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "V380Protect"
+rootProject.name = "CamGuard"
 include(":app")

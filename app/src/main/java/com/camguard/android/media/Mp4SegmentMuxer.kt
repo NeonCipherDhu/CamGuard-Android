@@ -1,4 +1,4 @@
-package com.v380protect.android.media
+package com.camguard.android.media
 
 import android.content.ContentValues
 import android.content.Context
@@ -8,10 +8,10 @@ import android.media.MediaMuxer
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
-import com.v380protect.android.model.CameraConfig
-import com.v380protect.android.protocol.V380Frame
-import com.v380protect.android.protocol.V380RecordingSegment
-import com.v380protect.android.protocol.VideoCodec
+import com.camguard.android.model.CameraConfig
+import com.camguard.android.protocol.CameraFrame
+import com.camguard.android.protocol.RecordingSegment
+import com.camguard.android.protocol.VideoCodec
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -231,7 +231,7 @@ object FootageBackupStore {
     fun getSegmentBackupFile(
         context: Context,
         camera: CameraConfig,
-        segment: V380RecordingSegment
+        segment: RecordingSegment
     ): File {
         val camKey = cameraFolderKey(camera)
         val dateDir = getCameraDateBackupDir(context, camera, segment.dateKeyUtc)
@@ -242,7 +242,7 @@ object FootageBackupStore {
     fun findSegmentBackupFile(
         context: Context,
         camera: CameraConfig,
-        segment: V380RecordingSegment
+        segment: RecordingSegment
     ): File? {
         val exact = getSegmentBackupFile(context, camera, segment)
         if (exact.isFile && exact.length() > 512L) {
@@ -262,7 +262,7 @@ object FootageBackupStore {
     fun saveSegmentBackupMeta(
         context: Context,
         camera: CameraConfig,
-        segments: List<V380RecordingSegment>
+        segments: List<RecordingSegment>
     ) {
         if (segments.isEmpty()) return
         val byDate = segments.groupBy { it.dateKeyUtc }
@@ -270,7 +270,7 @@ object FootageBackupStore {
             try {
                 val dir = getCameraDateBackupDir(context, camera, dateKey)
                 val metaFile = File(dir, "segments_meta.json")
-                val existingMap = LinkedHashMap<String, V380RecordingSegment>()
+                val existingMap = LinkedHashMap<String, RecordingSegment>()
                 for (s in loadBackedUpSegmentsForDate(context, camera, dateKey)) {
                     existingMap["${s.segId}_${s.startTs}"] = s
                 }
@@ -302,9 +302,9 @@ object FootageBackupStore {
         context: Context,
         camera: CameraConfig,
         dateKey: String
-    ): List<V380RecordingSegment> {
+    ): List<RecordingSegment> {
         val dir = getCameraDateBackupDir(context, camera, dateKey)
-        val result = LinkedHashMap<String, V380RecordingSegment>()
+        val result = LinkedHashMap<String, RecordingSegment>()
 
         val metaFile = File(dir, "segments_meta.json")
         if (metaFile.isFile) {
@@ -312,7 +312,7 @@ object FootageBackupStore {
                 val arr = JSONArray(metaFile.readText(Charsets.UTF_8))
                 for (i in 0 until arr.length()) {
                     val obj = arr.optJSONObject(i) ?: continue
-                    val seg = V380RecordingSegment(
+                    val seg = RecordingSegment(
                         segId = obj.optInt("segId"),
                         rawType = obj.optInt("rawType", 1),
                         startTs = obj.optLong("startTs"),
@@ -340,7 +340,7 @@ object FootageBackupStore {
                     val eTs = m.groupValues[3].toLongOrNull() ?: return@forEach
                     val key = "${segId}_$sTs"
                     if (!result.containsKey(key) && sTs > 0L && eTs > sTs) {
-                        result[key] = V380RecordingSegment(
+                        result[key] = RecordingSegment(
                             segId = segId,
                             rawType = 1,
                             startTs = sTs,
@@ -381,7 +381,7 @@ object FootageBackupStore {
         return items.sortedByDescending { it.timestampMs }
     }
 
-    fun exportMp4ToPublicMovies(context: Context, mp4File: File, displaySubfolder: String = "V380Protect"): Boolean {
+    fun exportMp4ToPublicMovies(context: Context, mp4File: File, displaySubfolder: String = "CamGuard"): Boolean {
         if (!mp4File.isFile || mp4File.length() <= 512L) return false
         return try {
             val values = ContentValues().apply {
@@ -429,7 +429,7 @@ class Mp4StreamMuxer(
     private var firstFrameWallClockSec: Long = 0L
 
     @Synchronized
-    fun writeVideoFrame(frame: V380Frame): Boolean {
+    fun writeVideoFrame(frame: CameraFrame): Boolean {
         if (closed || frame.isAudio || frame.payload.size < 5) return false
 
         val codec = when {

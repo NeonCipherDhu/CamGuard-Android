@@ -1,4 +1,4 @@
-package com.v380protect.android.ui.components
+package com.camguard.android.ui.components
 
 import android.content.ContentValues
 import android.content.Context
@@ -40,7 +40,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import com.v380protect.android.media.CameraStreamController
+import com.camguard.android.media.CameraStreamController
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -51,18 +51,18 @@ class VideoSurfaceHandle {
     fun captureSnapshotToGallery(
         context: Context,
         cameraName: String,
-        camera: com.v380protect.android.model.CameraConfig? = null
+        camera: com.camguard.android.model.CameraConfig? = null
     ): String? {
         val tv = textureView ?: return null
         val bmp = try { tv.bitmap } catch (_: Exception) { null } ?: return null
         return try {
-            val safeName = cameraName.replace(Regex("[^a-zA-Z0-9_-]"), "_").ifBlank { "V380" }
+            val safeName = cameraName.replace(Regex("[^a-zA-Z0-9_-]"), "_").ifBlank { "Camera" }
             val ts = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
             val filename = "${safeName}_$ts.jpg"
 
             if (camera != null) {
                 try {
-                    val localDir = com.v380protect.android.media.FootageBackupStore.getLocalCapturesRoot(context, camera)
+                    val localDir = com.camguard.android.media.FootageBackupStore.getLocalCapturesRoot(context, camera)
                     val localFile = java.io.File(localDir, filename)
                     localFile.outputStream().use { out ->
                         bmp.compress(Bitmap.CompressFormat.JPEG, 95, out)
@@ -75,7 +75,7 @@ class VideoSurfaceHandle {
                 put(MediaStore.Images.Media.DISPLAY_NAME, filename)
                 put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    put(MediaStore.Images.Media.RELATIVE_PATH, "${Environment.DIRECTORY_PICTURES}/V380Protect")
+                    put(MediaStore.Images.Media.RELATIVE_PATH, "${Environment.DIRECTORY_PICTURES}/CamGuard")
                     put(MediaStore.Images.Media.IS_PENDING, 1)
                 }
             }
@@ -98,7 +98,7 @@ class VideoSurfaceHandle {
 }
 
 @Composable
-fun V380VideoSurface(
+fun CameraVideoSurface(
     controller: CameraStreamController,
     modifier: Modifier = Modifier,
     enablePinchZoom: Boolean = false,

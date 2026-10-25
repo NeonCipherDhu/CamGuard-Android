@@ -1,4 +1,4 @@
-package com.v380protect.android.media
+package com.camguard.android.media
 
 import android.content.Context
 import android.media.AudioAttributes
@@ -7,11 +7,11 @@ import android.media.AudioTrack
 import android.media.MediaCodec
 import android.media.MediaFormat
 import android.view.Surface
-import com.v380protect.android.model.CameraConfig
-import com.v380protect.android.protocol.V380AudioDecoder
-import com.v380protect.android.protocol.V380Client
-import com.v380protect.android.protocol.V380Frame
-import com.v380protect.android.protocol.VideoCodec
+import com.camguard.android.model.CameraConfig
+import com.camguard.android.protocol.CameraAudioDecoder
+import com.camguard.android.protocol.CameraClient
+import com.camguard.android.protocol.CameraFrame
+import com.camguard.android.protocol.VideoCodec
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -52,7 +52,7 @@ class CameraStreamController(
     )
     val telemetry: StateFlow<StreamTelemetry> = _telemetry.asStateFlow()
 
-    private var client: V380Client? = null
+    private var client: CameraClient? = null
     private var workerThread: Thread? = null
     @Volatile private var running = false
 
@@ -92,7 +92,7 @@ class CameraStreamController(
             bytesWindow = 0L
             framesWindow = 0
 
-            val c = V380Client(
+            val c = CameraClient(
                 ip = config.ip,
                 port = config.port,
                 deviceId = config.deviceId,
@@ -107,7 +107,7 @@ class CameraStreamController(
 
             workerThread = Thread({
                 c.runForever()
-            }, "V380Stream-${config.camId}").apply {
+            }, "CameraStream-${config.camId}").apply {
                 isDaemon = true
                 start()
             }
@@ -146,7 +146,7 @@ class CameraStreamController(
         synchronized(recordLock) {
             if (activeLiveMuxer != null) return activeLiveRecordFile?.name
             val dir = FootageBackupStore.getLocalCapturesRoot(context, config)
-            val safeName = config.name.replace(Regex("[^a-zA-Z0-9_-]"), "_").ifBlank { "V380" }
+            val safeName = config.name.replace(Regex("[^a-zA-Z0-9_-]"), "_").ifBlank { "Camera" }
             val ts = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
             val outFile = File(dir, "${safeName}_REC_$ts.mp4")
             val muxer = Mp4StreamMuxer(
@@ -159,7 +159,7 @@ class CameraStreamController(
             val kfCodec = synchronized(videoLock) { activeCodecType }
             if (kf != null && kfCodec != VideoCodec.UNKNOWN) {
                 muxer.writeVideoFrame(
-                    V380Frame(
+                    CameraFrame(
                         isAudio = false,
                         rawType = if (kfCodec == VideoCodec.H265) 0x28 else 0x00,
                         payload = kf,
@@ -353,7 +353,7 @@ class CameraStreamController(
         )
     }
 
-    private fun handleFrame(frame: V380Frame) {
+    private fun handleFrame(frame: CameraFrame) {
         if (!running) return
         bytesWindow += frame.payload.size
 
@@ -458,16 +458,16 @@ class CameraStreamController(
         }
     }
 
-    private fun handleAudioFrame(frame: V380Frame) {
+    private fun handleAudioFrame(frame: CameraFrame) {
         synchronized(audioLock) {
             when (frame.audioCodec) {
                 "aac" -> decodeAndPlayAacUnlocked(frame.payload)
                 "alaw" -> {
-                    val pcm = V380AudioDecoder.decodeAlawToPcm16(frame.payload)
+                    val pcm = CameraAudioDecoder.decodeAlawToPcm16(frame.payload)
                     playPcm16Unlocked(pcm, 8000)
                 }
                 else -> {
-                    val pcm = V380AudioDecoder.decodeAdpcmToPcm16(frame.payload)
+                    val pcm = CameraAudioDecoder.decodeAdpcmToPcm16(frame.payload)
                     playPcm16Unlocked(pcm, 8000)
                 }
             }

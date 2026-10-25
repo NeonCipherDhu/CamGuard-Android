@@ -1,4 +1,4 @@
-package com.v380protect.android.ui.screens
+package com.camguard.android.ui.screens
 
 import android.app.Activity
 import android.content.pm.ActivityInfo
@@ -86,18 +86,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.v380protect.android.media.CameraStreamController
-import com.v380protect.android.model.CameraConfig
-import com.v380protect.android.ui.V380ViewModel
-import com.v380protect.android.ui.components.VideoSurfaceHandle
-import com.v380protect.android.ui.components.V380VideoSurface
+import com.camguard.android.media.CameraStreamController
+import com.camguard.android.model.CameraConfig
+import com.camguard.android.ui.CameraViewModel
+import com.camguard.android.ui.components.VideoSurfaceHandle
+import com.camguard.android.ui.components.CameraVideoSurface
 import java.util.Locale
 
 @Composable
 fun CameraDetailScreen(
     camera: CameraConfig,
     controller: CameraStreamController,
-    viewModel: V380ViewModel,
+    viewModel: CameraViewModel,
     onBack: () -> Unit,
     onEditSettings: (CameraConfig) -> Unit,
     onOpenFootageReview: () -> Unit = {}
@@ -185,7 +185,7 @@ fun CameraDetailScreen(
                 .fillMaxSize()
                 .background(Color(0xFF09090B))
         ) {
-            V380VideoSurface(
+            CameraVideoSurface(
                 controller = controller,
                 modifier = Modifier.fillMaxSize(),
                 enablePinchZoom = true,
@@ -419,7 +419,7 @@ fun CameraDetailScreen(
                     .aspectRatio(16f / 9f)
                     .background(Color.Black)
             ) {
-                V380VideoSurface(
+                CameraVideoSurface(
                     controller = controller,
                     modifier = Modifier.fillMaxSize(),
                     enablePinchZoom = true,
@@ -823,7 +823,7 @@ fun CameraDetailScreen(
 
 @Composable
 private fun StreamStatusBadgeRow(
-    telemetry: com.v380protect.android.media.StreamTelemetry
+    telemetry: com.camguard.android.media.StreamTelemetry
 ) {
     if (!telemetry.isConnected) {
         Row(

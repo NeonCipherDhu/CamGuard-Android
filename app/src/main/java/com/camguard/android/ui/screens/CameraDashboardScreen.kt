@@ -1,4 +1,4 @@
-package com.v380protect.android.ui.screens
+package com.camguard.android.ui.screens
 
 import android.app.Activity
 import android.content.res.Configuration
@@ -108,10 +108,10 @@ import androidx.compose.ui.zIndex
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import com.v380protect.android.media.CameraStreamController
-import com.v380protect.android.model.CameraConfig
-import com.v380protect.android.ui.V380ViewModel
-import com.v380protect.android.ui.components.V380VideoSurface
+import com.camguard.android.media.CameraStreamController
+import com.camguard.android.model.CameraConfig
+import com.camguard.android.ui.CameraViewModel
+import com.camguard.android.ui.components.CameraVideoSurface
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -121,7 +121,7 @@ import kotlin.math.abs
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun CameraDashboardScreen(
-    viewModel: V380ViewModel,
+    viewModel: CameraViewModel,
     onOpenCamera: (CameraConfig) -> Unit,
     onOpenFootageReview: (CameraConfig) -> Unit = {},
     onAddCameraClick: () -> Unit,
@@ -190,7 +190,7 @@ fun CameraDashboardScreen(
                 ) {
                     cameras.forEach { cam ->
                         val ctrl = viewModel.getOrCreateController(cam)
-                        V380VideoSurface(
+                        CameraVideoSurface(
                             controller = ctrl,
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -234,7 +234,7 @@ fun CameraDashboardScreen(
                                             .background(Color.Black),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        V380VideoSurface(
+                                        CameraVideoSurface(
                                             controller = ctrl,
                                             modifier = Modifier.fillMaxSize(),
                                             enablePinchZoom = false,
@@ -333,7 +333,7 @@ fun CameraDashboardScreen(
                     verticalArrangement = Arrangement.spacedBy((-1).dp)
                 ) {
                     Text(
-                        text = "V380 Protect",
+                        text = "CamGuard",
                         color = Color(0xFFF4F4F5),
                         fontSize = 15.sp,
                         lineHeight = 16.sp,
@@ -343,7 +343,7 @@ fun CameraDashboardScreen(
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = "${cameras.size} Camera${if (cameras.size == 1) "" else "s"}",
+                        text = "${cameras.size} Camera${if (cameras.size == 1) "" else "s"} • Unofficial client compatible with V380 cameras.",
                         color = Color(0xFF71717A),
                         fontSize = 11.sp,
                         lineHeight = 12.sp,
@@ -510,7 +510,7 @@ fun CameraDashboardScreen(
                         Spacer(modifier = Modifier.height(16.dp))
 
                         Text(
-                            text = "No V380 Cameras Added Yet",
+                            text = "No Cameras Added Yet",
                             color = Color(0xFFF4F4F5),
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
@@ -520,7 +520,7 @@ fun CameraDashboardScreen(
                         Spacer(modifier = Modifier.height(8.dp))
 
                         Text(
-                            text = "Scan your Wi-Fi to automatically find your V380 cameras, or add a camera manually.",
+                            text = "Unofficial client compatible with V380 cameras.\nScan your Wi-Fi to automatically find cameras, or add a camera manually.",
                             color = Color(0xFFA1A1AA),
                             fontSize = 13.sp,
                             textAlign = TextAlign.Center
@@ -943,7 +943,7 @@ private fun CameraTileCard(
                     .aspectRatio(16f / 9f)
                     .background(Color(0xFF09090B))
             ) {
-                V380VideoSurface(
+                CameraVideoSurface(
                     controller = controller,
                     modifier = Modifier.fillMaxSize(),
                     enablePinchZoom = false,

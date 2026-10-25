@@ -8,9 +8,8 @@ local.properties
 .idea/
 *.apk
 *.aab
-!V380Protect-Android.apk
+!CamGuard-Android.apk
 AGENTS.md
 launch_emulator_visible.ps1
 Thumbs.db
 .DS_Store
-

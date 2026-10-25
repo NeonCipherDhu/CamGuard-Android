@@ -1,4 +1,4 @@
-package com.v380protect.android.ui.components
+package com.camguard.android.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -59,9 +59,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.v380protect.android.model.CameraConfig
-import com.v380protect.android.protocol.DiscoveredCamera
-import com.v380protect.android.protocol.V380Discovery
+import com.camguard.android.model.CameraConfig
+import com.camguard.android.protocol.DiscoveredCamera
+import com.camguard.android.protocol.LanDiscovery
 import java.util.UUID
 
 @Composable
@@ -113,7 +113,7 @@ fun AddOrEditCameraDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = if (initialCamera == null) "Add V380 Camera" else "Camera Settings",
+                        text = if (initialCamera == null) "Add Camera" else "Camera Settings",
                         color = Color(0xFFF4F4F5),
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold
@@ -124,7 +124,7 @@ fun AddOrEditCameraDialog(
                 }
 
                 Text(
-                    text = "Native V380 / V380 Pro Protocol (TCP Port 8800)",
+                    text = "Unofficial client compatible with V380 cameras.",
                     color = Color(0xFF71717A),
                     fontSize = 12.sp
                 )
@@ -171,7 +171,7 @@ fun AddOrEditCameraDialog(
                 OutlinedTextField(
                     value = deviceId,
                     onValueChange = { deviceId = it; errorMsg = null },
-                    label = { Text("V380 Device ID (8–10 digits)") },
+                    label = { Text("Device ID (8–10 digits)") },
                     placeholder = { Text("e.g. 12345678", color = Color(0xFF52525B)) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -297,12 +297,12 @@ fun AddOrEditCameraDialog(
                                 }
                                 val cleanDevId = deviceId.trim()
                                 val cleanName = name.trim().ifBlank {
-                                    if (cleanDevId.isNotEmpty()) "V380 ($cleanDevId)" else "V380 ($cleanIp)"
+                                    if (cleanDevId.isNotEmpty()) "Camera ($cleanDevId)" else "Camera ($cleanIp)"
                                 }
                                 val cleanPort = portStr.trim().toIntOrNull() ?: 8800
                                 val cfg = CameraConfig(
                                     camId = initialCamera?.camId
-                                        ?: (if (cleanDevId.isNotEmpty()) "v380_$cleanDevId" else UUID.randomUUID().toString().take(8)),
+                                        ?: (if (cleanDevId.isNotEmpty()) "cam_$cleanDevId" else UUID.randomUUID().toString().take(8)),
                                     name = cleanName,
                                     ip = cleanIp,
                                     port = cleanPort,
@@ -343,7 +343,7 @@ fun LanDiscoveryDialog(
     var sharedPassword by remember { mutableStateOf("") }
     var showPassword by remember { mutableStateOf(false) }
     val manualDevIds = remember { mutableStateMapOf<String, String>() }
-    val localIps = remember { V380Discovery.getLocalIpv4Addresses().filterNot { it.startsWith("10.0.2.") } }
+    val localIps = remember { LanDiscovery.getLocalIpv4Addresses().filterNot { it.startsWith("10.0.2.") } }
 
     val fieldColors = OutlinedTextFieldDefaults.colors(
         focusedBorderColor = Color(0xFF3B82F6),

@@ -10,7 +10,7 @@ set "PATH=%JAVA_HOME%\bin;%ANDROID_HOME%\platform-tools;%PATH%"
 cd /d "%PROJ_DIR%"
 
 echo ========================================================
-echo   V380 Protect Android - Instant Build ^& Run via ADB
+echo   CamGuard Android - Instant Build ^& Run via ADB
 echo ========================================================
 echo.
 
@@ -47,19 +47,19 @@ if errorlevel 1 (
     exit /b 1
 )
 
-copy /Y "%USERPROFILE%\.android\v380-build\app\outputs\apk\release\app-release.apk" "V380Protect-Android.apk" >nul
+copy /Y "%USERPROFILE%\.android\camguard-build\app\outputs\apk\release\app-release.apk" "CamGuard-Android.apk" >nul
 
 echo [2/3] Pushing ^& updating app silently on device (keeps your saved cameras)...
-"%ADB%" install -r "V380Protect-Android.apk"
+"%ADB%" install -r "CamGuard-Android.apk"
 if errorlevel 1 (
     echo [ERROR] Could not install on device. Check USB/Wireless debugging prompt on phone.
     pause
     exit /b 1
 )
 
-echo [3/3] Launching V380 Protect on your screen...
-"%ADB%" shell am force-stop com.v380protect.android
-"%ADB%" shell am start -n com.v380protect.android/.MainActivity
+echo [3/3] Launching CamGuard on your screen...
+"%ADB%" shell am force-stop com.camguard.android
+"%ADB%" shell am start -n com.camguard.android/.MainActivity
 
 echo.
 echo [DONE] App is now running on your device!

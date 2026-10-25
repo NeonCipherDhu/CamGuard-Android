@@ -1,4 +1,4 @@
-package com.v380protect.android.model
+package com.camguard.android.model
 
 import android.content.Context
 import org.json.JSONArray
@@ -67,7 +67,7 @@ data class CameraConfig(
             }
             return CameraConfig(
                 camId = obj.optString("cam_id", UUID.randomUUID().toString().take(8)),
-                name = obj.optString("name", "V380 Camera"),
+                name = obj.optString("name", "IP Camera"),
                 ip = obj.optString("ip", ""),
                 port = obj.optInt("port", 8800),
                 deviceId = obj.optString("device_id", ""),
@@ -85,7 +85,7 @@ data class CameraConfig(
 }
 
 class CameraRepository(context: Context) {
-    private val prefs = context.getSharedPreferences("v380_protect_prefs", Context.MODE_PRIVATE)
+    private val prefs = context.getSharedPreferences("camguard_prefs", Context.MODE_PRIVATE)
 
     fun loadCameras(): List<CameraConfig> {
         val raw = prefs.getString("cameras_json", null) ?: return emptyList()

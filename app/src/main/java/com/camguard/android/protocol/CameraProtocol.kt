@@ -1,4 +1,4 @@
-package com.v380protect.android.protocol
+package com.camguard.android.protocol
 
 import android.content.Context
 import android.net.wifi.WifiManager
@@ -38,7 +38,7 @@ enum class VideoCodec(val mimeType: String, val label: String) {
     H265("video/hevc", "H.265")
 }
 
-data class V380RecordingSegment(
+data class RecordingSegment(
     val segId: Int,
     val rawType: Int,
     val startTs: Long,
@@ -99,7 +99,7 @@ data class V380RecordingSegment(
     }
 }
 
-object V380SdSessionGate {
+object SdSessionGate {
     private val mapGuard = Any()
     private val locks = HashMap<String, ReentrantLock>()
     private val lastClosedMs = HashMap<String, Long>()
@@ -158,13 +158,13 @@ data class DiscoveredCamera(
 ) {
     fun displayTitle(): String {
         val label = name.ifBlank {
-            if (devId.isNotBlank()) "V380 ($devId)" else "V380 @ $ip"
+            if (devId.isNotBlank()) "Camera ($devId)" else "Camera @ $ip"
         }
         return "$label [$ip:$port]"
     }
 }
 
-class V380Frame(
+class CameraFrame(
     val isAudio: Boolean,
     val rawType: Int,
     val payload: ByteArray,
@@ -177,7 +177,7 @@ class V380Frame(
     val audioCodec: String = "adpcm" // "adpcm" | "alaw" | "aac"
 )
 
-object V380Commands {
+object CameraCommands {
     val PTZ_RIGHT = byteArrayOf(0xAA.toByte(), 0x00, 0x00, 0x00, 0xE8.toByte(), 0x03, 0xE8.toByte(), 0x03, 0xEA.toByte(), 0x03, 0xE8.toByte(), 0x03, 0x00, 0x00, 0x01, 0x00)
     val PTZ_LEFT  = byteArrayOf(0xAA.toByte(), 0x00, 0x00, 0x00, 0xE8.toByte(), 0x03, 0xE8.toByte(), 0x03, 0xE9.toByte(), 0x03, 0xE8.toByte(), 0x03, 0x00, 0x00, 0x01, 0x00)
     val PTZ_UP    = byteArrayOf(0xAA.toByte(), 0x00, 0x00, 0x00, 0xE8.toByte(), 0x03, 0xE8.toByte(), 0x03, 0xE8.toByte(), 0x03, 0xEB.toByte(), 0x03, 0x00, 0x00, 0x01, 0x00)
@@ -208,7 +208,7 @@ object V380Commands {
     }
 }
 
-object V380AudioDecoder {
+object CameraAudioDecoder {
     private val IMA_STEP_TABLE = intArrayOf(
         7, 8, 9, 10, 11, 12, 13, 14, 16, 17,
         19, 21, 23, 25, 28, 31, 34, 37, 41, 45,
@@ -289,7 +289,7 @@ object V380AudioDecoder {
     }
 }
 
-object V380Discovery {
+object LanDiscovery {
     private val SEARCH_CMD = "NVDEVSEARCH^100".toByteArray(Charsets.US_ASCII)
 
     fun getLocalIpv4Addresses(): List<String> {
@@ -343,7 +343,7 @@ object V380Discovery {
         var multicastLock: WifiManager.MulticastLock? = null
         try {
             val wifi = context?.applicationContext?.getSystemService(Context.WIFI_SERVICE) as? WifiManager
-            multicastLock = wifi?.createMulticastLock("v380_discovery_lock")?.apply {
+            multicastLock = wifi?.createMulticastLock("camguard_discovery_lock")?.apply {
                 setReferenceCounted(true)
                 acquire()
             }
@@ -483,7 +483,7 @@ object V380Discovery {
                             ip = ip,
                             mac = "",
                             port = 8800,
-                            name = "V380 Camera ($ip)",
+                            name = "Camera ($ip)",
                             discoveryMethod = "TCP Port 8800 Scan"
                         )
                     }
@@ -557,7 +557,7 @@ object V380Discovery {
             ip = ip,
             mac = mac,
             port = 8800,
-            name = if (devId.isNotBlank()) "V380 ($devId)" else "V380 ($ip)",
+            name = if (devId.isNotBlank()) "Camera ($devId)" else "Camera ($ip)",
             discoveryMethod = "UDP Discovery"
         )
     }
@@ -627,7 +627,7 @@ object V380Discovery {
     }
 }
 
-class V380Client(
+class CameraClient(
     ip: String,
     port: Int = 8800,
     deviceId: String = "",
@@ -635,7 +635,7 @@ class V380Client(
     val password: String = "",
     streamQuality: Int = 1, // 1 = HD, 0 = SD
     val enableAudio: Boolean = true,
-    private val onFrame: ((V380Frame) -> Unit)? = null,
+    private val onFrame: ((CameraFrame) -> Unit)? = null,
     private val onStatus: ((String) -> Unit)? = null
 ) {
     companion object {
@@ -712,7 +712,7 @@ class V380Client(
             try { sock.shutdownInput() } catch (_: Exception) {}
             try { sock.shutdownOutput() } catch (_: Exception) {}
             try { sock.close() } catch (_: Exception) {}
-            V380SdSessionGate.markClosed(ip)
+            SdSessionGate.markClosed(ip)
         }
     }
 
@@ -739,14 +739,14 @@ class V380Client(
     private fun resolveDeviceIdIfMissing(): Boolean {
         if (deviceId > 0L) return true
         emitStatus("Discovering Device ID...")
-        val directCam = V380Discovery.queryUnicastUdp10008(ip)
+        val directCam = LanDiscovery.queryUnicastUdp10008(ip)
         val directId = directCam?.devId?.toLongOrNull()
         if (directId != null && directId > 0L) {
             deviceId = directId
             emitStatus("Found Device ID: $deviceId")
             return true
         }
-        val devices = V380Discovery.discover(timeoutSec = 1.5, scanTcp8800 = false)
+        val devices = LanDiscovery.discover(timeoutSec = 1.5, scanTcp8800 = false)
         for (dev in devices) {
             val idVal = dev.devId.toLongOrNull()
             if (dev.ip == ip && idVal != null && idVal > 0L) {
@@ -1177,7 +1177,7 @@ class V380Client(
             }
 
             cb(
-                V380Frame(
+                CameraFrame(
                     isAudio = true,
                     rawType = rawType,
                     payload = audioPayload,
@@ -1196,7 +1196,7 @@ class V380Client(
         val isKey = isKeyVideoFrame(rawType, outerFrameType, normalized)
 
         cb(
-            V380Frame(
+            CameraFrame(
                 isAudio = false,
                 rawType = rawType,
                 payload = normalized,
@@ -1492,31 +1492,31 @@ class V380Client(
     }
 
     // --- Camera Control Commands ---
-    fun ptzUp(): Boolean = sendRaw(V380Commands.PTZ_UP)
-    fun ptzDown(): Boolean = sendRaw(V380Commands.PTZ_DOWN)
-    fun ptzLeft(): Boolean = sendRaw(V380Commands.PTZ_LEFT)
-    fun ptzRight(): Boolean = sendRaw(V380Commands.PTZ_RIGHT)
-    fun ptzStop(): Boolean = sendRaw(V380Commands.PTZ_STOP)
+    fun ptzUp(): Boolean = sendRaw(CameraCommands.PTZ_UP)
+    fun ptzDown(): Boolean = sendRaw(CameraCommands.PTZ_DOWN)
+    fun ptzLeft(): Boolean = sendRaw(CameraCommands.PTZ_LEFT)
+    fun ptzRight(): Boolean = sendRaw(CameraCommands.PTZ_RIGHT)
+    fun ptzStop(): Boolean = sendRaw(CameraCommands.PTZ_STOP)
 
-    fun lightOn(): Boolean = sendRaw(V380Commands.LIGHT_ON)
-    fun lightOff(): Boolean = sendRaw(V380Commands.LIGHT_OFF)
+    fun lightOn(): Boolean = sendRaw(CameraCommands.LIGHT_ON)
+    fun lightOff(): Boolean = sendRaw(CameraCommands.LIGHT_OFF)
     fun lightAuto(): Boolean {
-        val ok1 = sendRaw(V380Commands.LIGHT_AUTO)
+        val ok1 = sendRaw(CameraCommands.LIGHT_AUTO)
         try { Thread.sleep(30) } catch (_: Exception) {}
-        val ok2 = sendRaw(V380Commands.IMAGE_AUTO)
+        val ok2 = sendRaw(CameraCommands.IMAGE_AUTO)
         return ok1 || ok2
     }
 
-    fun imageColor(): Boolean = sendRaw(V380Commands.IMAGE_COLOR)
-    fun imageBw(): Boolean = sendRaw(V380Commands.IMAGE_BW)
+    fun imageColor(): Boolean = sendRaw(CameraCommands.IMAGE_COLOR)
+    fun imageBw(): Boolean = sendRaw(CameraCommands.IMAGE_BW)
     fun imageAuto(): Boolean {
-        val ok1 = sendRaw(V380Commands.IMAGE_AUTO)
+        val ok1 = sendRaw(CameraCommands.IMAGE_AUTO)
         try { Thread.sleep(30) } catch (_: Exception) {}
-        val ok2 = sendRaw(V380Commands.LIGHT_AUTO)
+        val ok2 = sendRaw(CameraCommands.LIGHT_AUTO)
         return ok1 || ok2
     }
 
-    fun imageFlip(): Boolean = sendRaw(V380Commands.IMAGE_FLIP)
+    fun imageFlip(): Boolean = sendRaw(CameraCommands.IMAGE_FLIP)
 
     // --- Hardware PTZ Preset (PTZX) Commands ---
     private fun sendPtzxPort8800(action: Int, slotId: Int): Boolean {
@@ -1568,23 +1568,23 @@ class V380Client(
 
     fun ptzPresetSet(slotId: Int): Boolean {
         val slot = slotId.coerceIn(0, 5)
-        val okAdd = sendRaw(V380Commands.ptzxPacket(V380Commands.PTZX_ACTION_ADD, slot))
+        val okAdd = sendRaw(CameraCommands.ptzxPacket(CameraCommands.PTZX_ACTION_ADD, slot))
         try { Thread.sleep(40) } catch (_: Exception) {}
-        val okReset = sendRaw(V380Commands.ptzxPacket(V380Commands.PTZX_ACTION_RESET, slot))
+        val okReset = sendRaw(CameraCommands.ptzxPacket(CameraCommands.PTZX_ACTION_RESET, slot))
         Thread {
-            sendPtzxPort8800(V380Commands.PTZX_ACTION_ADD, slot)
+            sendPtzxPort8800(CameraCommands.PTZX_ACTION_ADD, slot)
             try { Thread.sleep(120) } catch (_: Exception) {}
-            sendPtzxPort8800(V380Commands.PTZX_ACTION_RESET, slot)
+            sendPtzxPort8800(CameraCommands.PTZX_ACTION_RESET, slot)
         }.apply { isDaemon = true }.start()
         return okAdd || okReset
     }
 
     fun ptzPresetGoto(slotId: Int): Boolean {
         val slot = slotId.coerceIn(0, 5)
-        val okStream = sendRaw(V380Commands.ptzxPacket(V380Commands.PTZX_ACTION_GOTO, slot))
+        val okStream = sendRaw(CameraCommands.ptzxPacket(CameraCommands.PTZX_ACTION_GOTO, slot))
         if (!okStream) {
             Thread {
-                sendPtzxPort8800(V380Commands.PTZX_ACTION_GOTO, slot)
+                sendPtzxPort8800(CameraCommands.PTZX_ACTION_GOTO, slot)
             }.apply { isDaemon = true }.start()
         }
         return okStream
@@ -1592,9 +1592,9 @@ class V380Client(
 
     fun ptzPresetClear(slotId: Int): Boolean {
         val slot = slotId.coerceIn(0, 5)
-        val okStream = sendRaw(V380Commands.ptzxPacket(V380Commands.PTZX_ACTION_DEL, slot))
+        val okStream = sendRaw(CameraCommands.ptzxPacket(CameraCommands.PTZX_ACTION_DEL, slot))
         Thread {
-            sendPtzxPort8800(V380Commands.PTZX_ACTION_DEL, slot)
+            sendPtzxPort8800(CameraCommands.PTZX_ACTION_DEL, slot)
         }.apply { isDaemon = true }.start()
         return okStream
     }
@@ -1622,10 +1622,10 @@ class V380Client(
         year: Int,
         month: Int,
         day: Int
-    ): Triple<Boolean, String, List<V380RecordingSegment>> {
+    ): Triple<Boolean, String, List<RecordingSegment>> {
         if (stopEvent.get()) return Triple(false, "Cancelled", emptyList())
 
-        return V380SdSessionGate.withCameraSdLock(ip, stopEvent) {
+        return SdSessionGate.withCameraSdLock(ip, stopEvent) {
             if (stopEvent.get()) return@withCameraSdLock Triple(false, "Cancelled", emptyList())
 
             var authMsg = "Connection failed"
@@ -1673,17 +1673,17 @@ class V380Client(
         year: Int,
         month: Int,
         day: Int
-    ): Triple<Boolean, String, List<V380RecordingSegment>>? {
+    ): Triple<Boolean, String, List<RecordingSegment>>? {
         for (readTry in 0 until 2) {
             if (stopEvent.get()) return Triple(false, "Cancelled", emptyList())
             if (readTry > 0) {
-                V380SdSessionGate.markClosed(ip)
+                SdSessionGate.markClosed(ip)
                 sleepInterruptible(165)
                 val (res, _) = authenticate(skipCloudWake = true)
                 if (res != 1) break
             }
 
-            val segments = ArrayList<V380RecordingSegment>()
+            val segments = ArrayList<RecordingSegment>()
             val seenKeys = HashSet<Long>()
             val sock = Socket()
             try {
@@ -1766,7 +1766,7 @@ class V380Client(
                             val dedupKey = (sid.toLong() shl 32) or (st and 0xFFFFFFFFL)
                             if (seenKeys.add(dedupKey)) {
                                 segments.add(
-                                    V380RecordingSegment(
+                                    RecordingSegment(
                                         segId = sid,
                                         rawType = rtype,
                                         startTs = st,
@@ -1796,7 +1796,7 @@ class V380Client(
         year: Int,
         month: Int,
         day: Int
-    ): Triple<Boolean, String, List<V380RecordingSegment>>? {
+    ): Triple<Boolean, String, List<RecordingSegment>>? {
         val sock = Socket()
         return try {
             sock.tcpNoDelay = true
@@ -1835,7 +1835,7 @@ class V380Client(
                 return Triple(true, "No recordings on SD card for this date", emptyList())
             }
 
-            val segments = ArrayList<V380RecordingSegment>(min(totalRecords, 4096))
+            val segments = ArrayList<RecordingSegment>(min(totalRecords, 4096))
             val seenKeys = HashSet<Long>()
             val chunkHdr = ByteArray(12)
 
@@ -1860,7 +1860,7 @@ class V380Client(
                         val dedupKey = (segId.toLong() shl 32) or (sTs and 0xFFFFFFFFL)
                         if (seenKeys.add(dedupKey)) {
                             segments.add(
-                                V380RecordingSegment(
+                                RecordingSegment(
                                     segId = segId,
                                     rawType = rawType,
                                     startTs = sTs,
@@ -1883,12 +1883,12 @@ class V380Client(
     }
 
     fun streamSdSegment(
-        segment: V380RecordingSegment,
+        segment: RecordingSegment,
         startTs: Long? = null,
         onProgressTs: ((Long) -> Unit)? = null
     ): Pair<Boolean, String> {
         stopEvent.set(false)
-        return V380SdSessionGate.withCameraSdLock(ip, stopEvent) {
+        return SdSessionGate.withCameraSdLock(ip, stopEvent) {
             if (stopEvent.get()) return@withCameraSdLock false to "Stopped"
 
             var authMsg = "Connection failed"
@@ -1942,7 +1942,7 @@ class V380Client(
     }
 
     private fun streamSdSegmentVia363(
-        segment: V380RecordingSegment,
+        segment: RecordingSegment,
         reqStart: Long,
         onProgressTs: ((Long) -> Unit)?
     ): Pair<Boolean, String>? {
@@ -2159,7 +2159,7 @@ class V380Client(
                 else -> "adpcm"
             }
             cb(
-                V380Frame(
+                CameraFrame(
                     isAudio = true,
                     rawType = curFrameType,
                     payload = audioPayload,
@@ -2229,7 +2229,7 @@ class V380Client(
             isKeyVideoFrame(rawHint, curFrameType, normalized)
 
         cb(
-            V380Frame(
+            CameraFrame(
                 isAudio = false,
                 rawType = rawHint,
                 payload = normalized,
@@ -2244,7 +2244,7 @@ class V380Client(
     }
 
     private fun streamSdSegmentVia321(
-        segment: V380RecordingSegment,
+        segment: RecordingSegment,
         reqStart: Long,
         onProgressTs: ((Long) -> Unit)?
     ): Pair<Boolean, String>? {
@@ -2299,7 +2299,7 @@ class V380Client(
         startTs: Long,
         endTs: Long,
         onProgressTs: ((Long) -> Unit)?,
-        origCb: ((V380Frame) -> Unit)?
+        origCb: ((CameraFrame) -> Unit)?
     ) {
         val sock = streamSock ?: return
         val needDecrypt = deviceVersion > 30

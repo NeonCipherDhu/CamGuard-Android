@@ -7,12 +7,12 @@ set "ANDROID_SDK_ROOT=%PROJ_DIR%.toolchain\android-sdk"
 set "PATH=%JAVA_HOME%\bin;%ANDROID_HOME%\platform-tools;%PATH%"
 
 cd /d "%PROJ_DIR%"
-echo Building V380Protect-Android.apk ...
+echo Building CamGuard-Android.apk ...
 call gradlew.bat assembleRelease --no-daemon
-if exist "%USERPROFILE%\.android\v380-build\app\outputs\apk\release\app-release.apk" (
-    copy /Y "%USERPROFILE%\.android\v380-build\app\outputs\apk\release\app-release.apk" "V380Protect-Android.apk" >nul
+if exist "%USERPROFILE%\.android\camguard-build\app\outputs\apk\release\app-release.apk" (
+    copy /Y "%USERPROFILE%\.android\camguard-build\app\outputs\apk\release\app-release.apk" "CamGuard-Android.apk" >nul
     echo.
-    echo [SUCCESS] Built V380Protect-Android.apk
+    echo [SUCCESS] Built CamGuard-Android.apk
 ) else (
     echo [ERROR] Build failed.
 )

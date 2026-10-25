@@ -1,4 +1,4 @@
-package com.v380protect.android.ui.screens
+package com.camguard.android.ui.screens
 
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
@@ -122,14 +122,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import com.v380protect.android.media.FootageReviewController
-import com.v380protect.android.media.FootageReviewState
-import com.v380protect.android.media.FootageSourceMode
-import com.v380protect.android.media.LocalCaptureItem
-import com.v380protect.android.media.PreviewCanvasMode
-import com.v380protect.android.model.CameraConfig
-import com.v380protect.android.protocol.V380RecordingSegment
-import com.v380protect.android.ui.components.VideoSurfaceHandle
+import com.camguard.android.media.FootageReviewController
+import com.camguard.android.media.FootageReviewState
+import com.camguard.android.media.FootageSourceMode
+import com.camguard.android.media.LocalCaptureItem
+import com.camguard.android.media.PreviewCanvasMode
+import com.camguard.android.model.CameraConfig
+import com.camguard.android.protocol.RecordingSegment
+import com.camguard.android.ui.components.VideoSurfaceHandle
 import java.io.File
 import java.util.Calendar
 import java.util.Locale
@@ -152,7 +152,7 @@ fun FootageReviewScreen(
     val videoHandle = remember { VideoSurfaceHandle() }
     val listState = rememberLazyListState()
 
-    var contextMenuSegment by remember { mutableStateOf<V380RecordingSegment?>(null) }
+    var contextMenuSegment by remember { mutableStateOf<RecordingSegment?>(null) }
     var showRangeBackupDialog by remember { mutableStateOf(false) }
 
     DisposableEffect(controller) {
@@ -1218,7 +1218,7 @@ private fun Interactive24HourTimeline(
     }
 
     val playheadTime12h = remember(state.playheadEpochSec) {
-        V380RecordingSegment.formatUtc12h(state.playheadEpochSec)
+        RecordingSegment.formatUtc12h(state.playheadEpochSec)
     }
 
     Column(
@@ -1671,7 +1671,7 @@ private fun SdFilterAndSortHeader(
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SdClipRowCard(
-    segment: V380RecordingSegment,
+    segment: RecordingSegment,
     isSelected: Boolean,
     isBackedUp: Boolean,
     isMenuOpen: Boolean,

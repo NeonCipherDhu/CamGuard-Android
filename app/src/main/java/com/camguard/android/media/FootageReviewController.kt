@@ -1,4 +1,4 @@
-package com.v380protect.android.media
+package com.camguard.android.media
 
 import android.content.Context
 import android.media.AudioAttributes
@@ -8,12 +8,12 @@ import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.view.Surface
-import com.v380protect.android.model.CameraConfig
-import com.v380protect.android.protocol.V380AudioDecoder
-import com.v380protect.android.protocol.V380Client
-import com.v380protect.android.protocol.V380Frame
-import com.v380protect.android.protocol.V380RecordingSegment
-import com.v380protect.android.protocol.VideoCodec
+import com.camguard.android.model.CameraConfig
+import com.camguard.android.protocol.CameraAudioDecoder
+import com.camguard.android.protocol.CameraClient
+import com.camguard.android.protocol.CameraFrame
+import com.camguard.android.protocol.RecordingSegment
+import com.camguard.android.protocol.VideoCodec
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -61,7 +61,7 @@ data class FootageReviewState(
     val formattedDateFull: String = "",
     val canvasMode: PreviewCanvasMode = PreviewCanvasMode.READING_SD,
     val statusSummary: String = "Reading SD card...",
-    val segments: List<V380RecordingSegment> = emptyList(),
+    val segments: List<RecordingSegment> = emptyList(),
     val localBackupPaths: Map<String, String> = emptyMap(), // key = "${segId}_${startTs}"
     val localCaptures: List<LocalCaptureItem> = emptyList(),
     val filterKind: String = "all", // "all" | "anomaly" | "normal"
@@ -84,11 +84,11 @@ data class FootageReviewState(
     val downloadLabel: String = "",
     val scrollToSegmentKeyTrigger: Pair<String, Long>? = null
 ) {
-    fun segmentKey(seg: V380RecordingSegment): String = "${seg.segId}_${seg.startTs}"
+    fun segmentKey(seg: RecordingSegment): String = "${seg.segId}_${seg.startTs}"
 
-    fun isBackedUp(seg: V380RecordingSegment): Boolean = localBackupPaths.containsKey(segmentKey(seg))
+    fun isBackedUp(seg: RecordingSegment): Boolean = localBackupPaths.containsKey(segmentKey(seg))
 
-    val filteredAndSortedSegments: List<V380RecordingSegment>
+    val filteredAndSortedSegments: List<RecordingSegment>
         get() {
             val filtered = when (filterKind) {
                 "anomaly" -> segments.filter { it.isAnomaly }
@@ -134,10 +134,10 @@ class FootageReviewController(
     private val playbackGeneration = AtomicLong(0L)
     private var debounceJob: Job? = null
 
-    @Volatile private var activeSdClient: V380Client? = null
+    @Volatile private var activeSdClient: CameraClient? = null
     @Volatile private var activePlaybackStop: AtomicBoolean? = null
     @Volatile private var activeDownloadStop: AtomicBoolean? = null
-    @Volatile private var activeDownloadClient: V380Client? = null
+    @Volatile private var activeDownloadClient: CameraClient? = null
 
     // Hardware Video Decoder & Surface (shared between SD stream and local .mp4 playback)
     private val videoLock = Any()
@@ -343,7 +343,7 @@ class FootageReviewController(
         )
 
         scope.launch {
-            val client = V380Client(
+            val client = CameraClient(
                 ip = camera.ip,
                 port = camera.port,
                 deviceId = camera.deviceId,
@@ -356,7 +356,7 @@ class FootageReviewController(
             if (listGeneration.get() != gen) return@launch
 
             // Merge remote SD segments + local backed-up SD segments deterministically
-            val mergedByKey = LinkedHashMap<String, V380RecordingSegment>()
+            val mergedByKey = LinkedHashMap<String, RecordingSegment>()
             for (s in remoteSegs) {
                 mergedByKey["${s.segId}_${s.startTs}"] = s
             }
@@ -432,7 +432,7 @@ class FootageReviewController(
      * - If streaming from the camera SD card, debounces by `120ms` and locks speed to `1x`.
      */
     fun selectSdSegment(
-        segment: V380RecordingSegment,
+        segment: RecordingSegment,
         startAtEpochSec: Long? = null,
         fromTimeline: Boolean = false,
         forceSdStream: Boolean = false
@@ -618,7 +618,7 @@ class FootageReviewController(
         )
     }
 
-    private fun startRemoteSdPlayback(segment: V380RecordingSegment, startEpochSec: Long) {
+    private fun startRemoteSdPlayback(segment: RecordingSegment, startEpochSec: Long) {
         val gen = playbackGeneration.incrementAndGet()
         val prevStop = activePlaybackStop
         prevStop?.set(true)
@@ -648,12 +648,12 @@ class FootageReviewController(
         )
 
         scope.launch {
-            var clientRef: V380Client? = null
+            var clientRef: CameraClient? = null
             var baseFrameTsMs: Long = -1L
             var baseWallMs: Long = 0L
             var videoFramesShown = 0L
 
-            val client = V380Client(
+            val client = CameraClient(
                 ip = camera.ip,
                 port = camera.port,
                 deviceId = camera.deviceId,
@@ -663,7 +663,7 @@ class FootageReviewController(
                 onFrame = { frame ->
                     if (stopFlag.get() || playbackGeneration.get() != gen) {
                         clientRef?.stop()
-                        return@V380Client
+                        return@CameraClient
                     }
                     // Wait while paused
                     var wasPaused = false
@@ -741,7 +741,7 @@ class FootageReviewController(
         }
     }
 
-    private fun handleIncomingSdFrame(frame: V380Frame, gen: Long) {
+    private fun handleIncomingSdFrame(frame: CameraFrame, gen: Long) {
         if (playbackGeneration.get() != gen) return
         if (frame.isAudio) {
             handleSdAudioFrame(frame)
@@ -786,7 +786,7 @@ class FootageReviewController(
      */
     private fun startLocalMp4Playback(
         mp4File: File,
-        segment: V380RecordingSegment?,
+        segment: RecordingSegment?,
         startEpochSec: Long
     ) {
         if (!mp4File.isFile || mp4File.length() <= 512L) return
@@ -952,7 +952,7 @@ class FootageReviewController(
      * with the emerald-green circular downloading animation (`DOWNLOADING • {pct}%`), and unlocks
      * all playback speeds (`1x..16x`) immediately upon completion.
      */
-    fun backupSingleSegment(segment: V380RecordingSegment) {
+    fun backupSingleSegment(segment: RecordingSegment) {
         if (_state.value.isDownloading) return
         cancelPendingDebouncedPlayback()
         stopPlaybackNonBlocking(resetToIdle = false)
@@ -1046,7 +1046,7 @@ class FootageReviewController(
         )
 
         scope.launch {
-            val candidates = ArrayList<V380RecordingSegment>()
+            val candidates = ArrayList<RecordingSegment>()
             val calStart = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
                 timeInMillis = min(startEpochSec, endEpochSec) * 1000L
                 set(Calendar.HOUR_OF_DAY, 0)
@@ -1075,7 +1075,7 @@ class FootageReviewController(
                 val daySegs = if (y == _state.value.year && m == _state.value.month && d == _state.value.day && _state.value.segments.isNotEmpty()) {
                     _state.value.segments
                 } else {
-                    val c = V380Client(
+                    val c = CameraClient(
                         ip = camera.ip,
                         port = camera.port,
                         deviceId = camera.deviceId,
@@ -1187,7 +1187,7 @@ class FootageReviewController(
     }
 
     private fun downloadSegmentToFile(
-        segment: V380RecordingSegment,
+        segment: RecordingSegment,
         outFile: File,
         stopFlag: AtomicBoolean,
         onPercent: (Int) -> Unit
@@ -1199,9 +1199,9 @@ class FootageReviewController(
         )
         var framesWritten = 0
         val expectedFrames = max(20, segment.durationSec * 20)
-        var clientRef: V380Client? = null
+        var clientRef: CameraClient? = null
 
-        val client = V380Client(
+        val client = CameraClient(
             ip = camera.ip,
             port = camera.port,
             deviceId = camera.deviceId,
@@ -1211,7 +1211,7 @@ class FootageReviewController(
             onFrame = { frame ->
                 if (stopFlag.get()) {
                     clientRef?.stop()
-                    return@V380Client
+                    return@CameraClient
                 }
                 if (!frame.isAudio) {
                     if (muxer.writeVideoFrame(frame)) {
@@ -1329,16 +1329,16 @@ class FootageReviewController(
         }
     }
 
-    private fun handleSdAudioFrame(frame: V380Frame) {
+    private fun handleSdAudioFrame(frame: CameraFrame) {
         synchronized(audioLock) {
             when (frame.audioCodec) {
                 "aac" -> decodeAndPlayAacUnlocked(frame.payload)
                 "alaw" -> {
-                    val pcm = V380AudioDecoder.decodeAlawToPcm16(frame.payload)
+                    val pcm = CameraAudioDecoder.decodeAlawToPcm16(frame.payload)
                     playPcm16Unlocked(pcm, 8000)
                 }
                 else -> {
-                    val pcm = V380AudioDecoder.decodeAdpcmToPcm16(frame.payload)
+                    val pcm = CameraAudioDecoder.decodeAdpcmToPcm16(frame.payload)
                     playPcm16Unlocked(pcm, 8000)
                 }
             }

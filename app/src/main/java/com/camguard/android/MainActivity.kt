@@ -1,4 +1,4 @@
-package com.v380protect.android
+package com.camguard.android
 
 import android.os.Bundle
 import android.view.WindowManager
@@ -17,15 +17,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.v380protect.android.model.CameraConfig
-import com.v380protect.android.ui.V380ViewModel
-import com.v380protect.android.ui.components.AddOrEditCameraDialog
-import com.v380protect.android.ui.components.LanDiscoveryDialog
-import com.v380protect.android.ui.screens.CameraDashboardScreen
-import com.v380protect.android.ui.screens.CameraDetailScreen
-import com.v380protect.android.ui.screens.FootageReviewScreen
+import com.camguard.android.model.CameraConfig
+import com.camguard.android.ui.CameraViewModel
+import com.camguard.android.ui.components.AddOrEditCameraDialog
+import com.camguard.android.ui.components.LanDiscoveryDialog
+import com.camguard.android.ui.screens.CameraDashboardScreen
+import com.camguard.android.ui.screens.CameraDetailScreen
+import com.camguard.android.ui.screens.FootageReviewScreen
 
-private val V380DarkColorScheme = darkColorScheme(
+private val CamGuardDarkColorScheme = darkColorScheme(
     primary = Color(0xFF3B82F6),
     secondary = Color(0xFF10B981),
     background = Color(0xFF09090B),
@@ -43,12 +43,12 @@ class MainActivity : ComponentActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         setContent {
-            MaterialTheme(colorScheme = V380DarkColorScheme) {
+            MaterialTheme(colorScheme = CamGuardDarkColorScheme) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = Color(0xFF09090B)
                 ) {
-                    V380ProtectApp()
+                    CamGuardApp()
                 }
             }
         }
@@ -56,7 +56,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun V380ProtectApp(viewModel: V380ViewModel = viewModel()) {
+fun CamGuardApp(viewModel: CameraViewModel = viewModel()) {
     val cameras by viewModel.cameras.collectAsState()
     val selectedCameraId by viewModel.selectedCameraId.collectAsState()
     val footageReviewCameraId by viewModel.footageReviewCameraId.collectAsState()

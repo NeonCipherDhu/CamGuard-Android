@@ -3,14 +3,14 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
-layout.buildDirectory.set(file("${System.getProperty("user.home")}/.android/v380-build/app"))
+layout.buildDirectory.set(file("${System.getProperty("user.home")}/.android/camguard-build/app"))
 
 android {
-    namespace = "com.v380protect.android"
+    namespace = "com.camguard.android"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.v380protect.android"
+        applicationId = "com.camguard.android"
         minSdk = 24
         targetSdk = 34
         versionCode = 1

@@ -21,7 +21,7 @@ set "PATH=%JAVA_HOME%\bin;!SDK_LINK!\platform-tools;!SDK_LINK!\emulator;%PATH%"
 cd /d "%PROJ_DIR%"
 
 echo ========================================================
-echo   V380 Protect Android - PC Emulator Launcher
+echo   CamGuard Android - PC Emulator Launcher
 echo ========================================================
 echo.
 
@@ -37,8 +37,8 @@ for /f "skip=1 tokens=1,2" %%A in ('"%ADB%" devices') do (
 )
 
 if "!EMU_ID!"=="" (
-    echo [1/4] Starting V380_Phone Android Emulator...
-    start "V380 Phone Emulator" "!EMULATOR!" -avd V380_Phone -gpu host -no-snapshot-save -netdelay none -netspeed full
+    echo [1/4] Starting Android Emulator...
+    start "CamGuard Phone Emulator" "!EMULATOR!" -avd V380_Phone -gpu host -no-snapshot-save -netdelay none -netspeed full
 
     echo Waiting for Android Emulator to boot...
     "%ADB%" wait-for-device
@@ -57,26 +57,26 @@ if "!EMU_ID!"=="" (
     echo [1/4] Emulator already running (!EMU_ID!)!
 )
 
-REM Forward V380 UDP discovery response port 10009 into Emulator
+REM Forward UDP discovery response port 10009 into Emulator
 "%ADB%" -s !EMU_ID! emu redir add udp:10009:10009 >nul 2>&1
 
 echo.
-echo [2/4] Building latest V380Protect-Android.apk...
+echo [2/4] Building latest CamGuard-Android.apk...
 call gradlew.bat assembleDebug --no-daemon
 if errorlevel 1 (
     echo [ERROR] Build failed.
     pause
     exit /b 1
 )
-copy /Y "%USERPROFILE%\.android\v380-build\app\outputs\apk\debug\app-debug.apk" "V380Protect-Android.apk" >nul
+copy /Y "%USERPROFILE%\.android\camguard-build\app\outputs\apk\debug\app-debug.apk" "CamGuard-Android.apk" >nul
 
 echo [3/4] Installing / updating app in Emulator...
-"%ADB%" -s !EMU_ID! install -r "V380Protect-Android.apk"
+"%ADB%" -s !EMU_ID! install -r "CamGuard-Android.apk"
 
-echo [4/4] Launching V380 Protect...
-"%ADB%" -s !EMU_ID! shell am force-stop com.v380protect.android
-"%ADB%" -s !EMU_ID! shell am start -n com.v380protect.android/.MainActivity
+echo [4/4] Launching CamGuard...
+"%ADB%" -s !EMU_ID! shell am force-stop com.camguard.android
+"%ADB%" -s !EMU_ID! shell am start -n com.camguard.android/.MainActivity
 
 echo.
-echo [SUCCESS] V380 Protect is now running in the phone window!
+echo [SUCCESS] CamGuard is now running in the phone window!
 pause

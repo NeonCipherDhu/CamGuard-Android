@@ -1,3 +1,4 @@
 <resources>
-    <string name="app_name">V380 Protect</string>
+    <string name="app_name">CamGuard</string>
+    <string name="app_compatibility_notice">Unofficial client compatible with V380 cameras.</string>
 </resources>
