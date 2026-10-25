@@ -33,7 +33,7 @@ Unofficial client compatible with V380 cameras, built with **Kotlin**, **Jetpack
 
 ## 📱 Installing the APK on Your Android Phone
 
-1. Download **`CamGuard-Android.apk`** from this repository and copy it to your Android phone.
+1. Download **`CamGuard-Android.apk`** from the [**GitHub Releases page**](https://github.com/NeonCipherDhu/CamGuard-Android/releases/latest) ([Direct APK Download](https://github.com/NeonCipherDhu/CamGuard-Android/releases/download/v1.0.0/CamGuard-Android.apk)) onto your Android phone.
 2. Tap **`CamGuard-Android.apk`** on your phone and allow *Install from unknown sources* if prompted.
 3. Open **CamGuard** and follow the steps below to connect your cameras.
 
