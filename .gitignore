@@ -1,0 +1,16 @@
+.gradle/
+.kotlin/
+.toolchain/
+build/
+app/build/
+local.properties
+*.iml
+.idea/
+*.apk
+*.aab
+!V380Protect-Android.apk
+AGENTS.md
+launch_emulator_visible.ps1
+Thumbs.db
+.DS_Store
+
