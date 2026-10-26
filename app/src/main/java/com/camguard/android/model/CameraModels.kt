@@ -35,6 +35,7 @@ data class CameraConfig(
     val lightMode: String = "auto", // "on" | "off" | "auto"
     val imageMode: String = "auto", // "color" | "bw" | "auto"
     val flipped: Boolean = false,
+    val connectionEnabled: Boolean = true,
     val ptzPresets: List<PtzPreset> = emptyList()
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
@@ -50,6 +51,7 @@ data class CameraConfig(
         put("light_mode", lightMode)
         put("image_mode", imageMode)
         put("flipped", flipped)
+        put("connection_enabled", connectionEnabled)
         val presetsArr = JSONArray()
         ptzPresets.forEach { presetsArr.put(it.toJson()) }
         put("ptz_presets", presetsArr)
@@ -78,6 +80,7 @@ data class CameraConfig(
                 lightMode = obj.optString("light_mode", "auto"),
                 imageMode = obj.optString("image_mode", "auto"),
                 flipped = obj.optBoolean("flipped", false),
+                connectionEnabled = obj.optBoolean("connection_enabled", true),
                 ptzPresets = presets
             )
         }

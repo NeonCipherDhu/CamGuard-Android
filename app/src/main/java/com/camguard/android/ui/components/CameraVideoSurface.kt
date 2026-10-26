@@ -9,34 +9,49 @@ import android.os.Environment
 import android.provider.MediaStore
 import android.view.Surface
 import android.view.TextureView
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -104,11 +119,14 @@ fun CameraVideoSurface(
     enablePinchZoom: Boolean = false,
     handle: VideoSurfaceHandle? = null,
     onSingleTap: (() -> Unit)? = null,
-    onDoubleTap: (() -> Unit)? = null
+    onDoubleTap: (() -> Unit)? = null,
+    onReconnect: (() -> Unit)? = null,
+    showStatusOverlay: Boolean = true
 ) {
     var zoom by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
     var activeSurface by remember(controller) { mutableStateOf<Surface?>(null) }
+    var lastFrameGrabMs by remember(controller) { mutableLongStateOf(0L) }
 
     DisposableEffect(controller) {
         onDispose {
@@ -164,6 +182,7 @@ fun CameraVideoSurface(
     }
 
     val telemetry by controller.telemetry.collectAsState()
+    val lastBlurredFrame by controller.lastBlurredFrame.collectAsState()
     val videoAspect = if (telemetry.width > 0 && telemetry.height > 0) {
         (telemetry.width.toFloat() / telemetry.height.toFloat()).coerceIn(0.5f, 3.0f)
     } else {
@@ -193,6 +212,7 @@ fun CameraVideoSurface(
                 TextureView(ctx).apply {
                     isOpaque = false
                     handle?.textureView = this
+                    controller.attachedTextureView = this
                     surfaceTextureListener = object : TextureView.SurfaceTextureListener {
                         override fun onSurfaceTextureAvailable(
                             st: SurfaceTexture,
@@ -212,6 +232,9 @@ fun CameraVideoSurface(
                         }
 
                         override fun onSurfaceTextureDestroyed(st: SurfaceTexture): Boolean {
+                            if (controller.attachedTextureView === this@apply) {
+                                controller.attachedTextureView = null
+                            }
                             activeSurface?.let { s ->
                                 controller.detachSurface(s)
                                 try { s.release() } catch (_: Exception) {}
@@ -221,12 +244,23 @@ fun CameraVideoSurface(
                         }
 
                         override fun onSurfaceTextureUpdated(st: SurfaceTexture) {
+                            if (controller.telemetry.value.isConnected) {
+                                val now = System.currentTimeMillis()
+                                if (controller.lastBlurredFrame.value == null || now - lastFrameGrabMs >= 1500L) {
+                                    lastFrameGrabMs = now
+                                    val bmp = try { getBitmap(320, 180) } catch (_: Exception) { null }
+                                    if (bmp != null) {
+                                        controller.onLiveFrameCaptured(bmp)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
             },
             update = { tv ->
                 handle?.textureView = tv
+                controller.attachedTextureView = tv
                 val st = tv.surfaceTexture
                 if (st != null && activeSurface == null) {
                     val s = Surface(st)
@@ -242,6 +276,118 @@ fun CameraVideoSurface(
                     translationY = offset.y
                 )
         )
+
+        if (!telemetry.isConnected) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0xFF09090B)),
+                contentAlignment = Alignment.Center
+            ) {
+                val blurredBmp = lastBlurredFrame
+                if (blurredBmp != null) {
+                    Image(
+                        bitmap = blurredBmp.asImageBitmap(),
+                        contentDescription = "Last seen frame",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color(0x7509090B))
+                    )
+                }
+
+                if (showStatusOverlay) {
+                    if (telemetry.isUserDisconnected) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = "Disconnected",
+                                color = Color(0xFFD4D4D8),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            if (onReconnect != null) {
+                                Row(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(20.dp))
+                                        .background(Color(0xEE1E3A8A))
+                                        .border(1.dp, Color(0xFF60A5FA), RoundedCornerShape(20.dp))
+                                        .clickable(onClick = onReconnect)
+                                        .padding(horizontal = 14.dp, vertical = 7.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Refresh,
+                                        contentDescription = "Reconnect",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                    Text(
+                                        text = "Reconnect",
+                                        color = Color.White,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .background(Color(0xCC121215), RoundedCornerShape(8.dp))
+                                    .border(1.dp, Color(0xFF27272A), RoundedCornerShape(8.dp))
+                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Text(
+                                    text = telemetry.statusText,
+                                    color = Color(0xFFD4D4D8),
+                                    fontSize = 11.sp,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                            val isActivelyConnecting = telemetry.statusText.startsWith("Connecting") ||
+                                telemetry.statusText.startsWith("Reconnecting") ||
+                                telemetry.statusText.startsWith("Authenticating")
+                            if (onReconnect != null && !isActivelyConnecting) {
+                                Row(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(20.dp))
+                                        .background(Color(0xDD18181B))
+                                        .border(1.dp, Color(0xFF3F3F46), RoundedCornerShape(20.dp))
+                                        .clickable(onClick = onReconnect)
+                                        .padding(horizontal = 12.dp, vertical = 5.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Refresh,
+                                        contentDescription = "Reconnect",
+                                        tint = Color(0xFF93C5FD),
+                                        modifier = Modifier.size(13.dp)
+                                    )
+                                    Text(
+                                        text = "Reconnect",
+                                        color = Color(0xFFE4E4E7),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         if (enablePinchZoom && zoom > 1.05f) {
             Box(

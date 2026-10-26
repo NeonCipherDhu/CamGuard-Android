@@ -53,6 +53,8 @@ import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SdCard
 import androidx.compose.material.icons.filled.Settings
@@ -190,7 +192,8 @@ fun CameraDetailScreen(
                 modifier = Modifier.fillMaxSize(),
                 enablePinchZoom = true,
                 handle = videoHandle,
-                onSingleTap = { showLandscapeHud = !showLandscapeHud }
+                onSingleTap = { showLandscapeHud = !showLandscapeHud },
+                onReconnect = { viewModel.setCameraConnection(camera.camId, true) }
             )
 
             AnimatedVisibility(
@@ -290,6 +293,11 @@ fun CameraDetailScreen(
                                 icon = Icons.Default.ControlCamera,
                                 active = showLandscapeControls,
                                 onClick = { showLandscapeControls = !showLandscapeControls }
+                            )
+                            HudIconBtn(
+                                icon = if (camera.connectionEnabled) Icons.Default.Link else Icons.Default.LinkOff,
+                                active = camera.connectionEnabled,
+                                onClick = { viewModel.toggleCameraConnection(camera.camId) }
                             )
                             HudIconBtn(
                                 icon = Icons.Default.FullscreenExit,
@@ -400,10 +408,17 @@ fun CameraDetailScreen(
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { viewModel.toggleCameraConnection(camera.camId) }) {
+                        Icon(
+                            imageVector = if (camera.connectionEnabled) Icons.Default.Link else Icons.Default.LinkOff,
+                            contentDescription = if (camera.connectionEnabled) "Disconnect Camera" else "Connect Camera",
+                            tint = if (camera.connectionEnabled) Color(0xFF60A5FA) else Color(0xFFEF4444)
+                        )
+                    }
                     IconButton(onClick = onOpenFootageReview) {
                         Icon(Icons.Default.SdCard, contentDescription = "Footage Review", tint = Color(0xFF60A5FA))
                     }
-                    IconButton(onClick = { controller.reconnect(camera) }) {
+                    IconButton(onClick = { viewModel.setCameraConnection(camera.camId, true) }) {
                         Icon(Icons.Default.Refresh, contentDescription = "Reconnect", tint = Color(0xFFA1A1AA))
                     }
                     IconButton(onClick = { onEditSettings(camera) }) {
@@ -423,7 +438,8 @@ fun CameraDetailScreen(
                     controller = controller,
                     modifier = Modifier.fillMaxSize(),
                     enablePinchZoom = true,
-                    handle = videoHandle
+                    handle = videoHandle,
+                    onReconnect = { viewModel.setCameraConnection(camera.camId, true) }
                 )
             }
 
@@ -826,6 +842,7 @@ private fun StreamStatusBadgeRow(
     telemetry: com.camguard.android.media.StreamTelemetry
 ) {
     if (!telemetry.isConnected) {
+        val isDisc = telemetry.isUserDisconnected
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -833,8 +850,12 @@ private fun StreamStatusBadgeRow(
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(4.dp))
-                    .background(Color(0xFF3F2E0E))
-                    .border(1.dp, Color(0xFFD97706), RoundedCornerShape(4.dp))
+                    .background(if (isDisc) Color(0xFF27272A) else Color(0xFF3F2E0E))
+                    .border(
+                        1.dp,
+                        if (isDisc) Color(0xFF52525B) else Color(0xFFD97706),
+                        RoundedCornerShape(4.dp)
+                    )
                     .padding(horizontal = 6.dp, vertical = 2.dp)
             ) {
                 Row(
@@ -845,11 +866,11 @@ private fun StreamStatusBadgeRow(
                         modifier = Modifier
                             .size(5.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFFFBBF24))
+                            .background(if (isDisc) Color(0xFFA1A1AA) else Color(0xFFFBBF24))
                     )
                     Text(
                         text = telemetry.statusText,
-                        color = Color(0xFFFDE68A),
+                        color = if (isDisc) Color(0xFFE4E4E7) else Color(0xFFFDE68A),
                         fontSize = 10.sp,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,

@@ -47,13 +47,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ControlCamera
 import androidx.compose.material.icons.filled.DragIndicator
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material.icons.filled.Radar
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SdCard
@@ -197,7 +197,8 @@ fun CameraDashboardScreen(
                                 .aspectRatio(16f / 9f),
                             enablePinchZoom = false,
                             onSingleTap = { showFullscreenExitHint = !showFullscreenExitHint },
-                            onDoubleTap = { isFullscreenWall = false }
+                            onDoubleTap = { isFullscreenWall = false },
+                            onReconnect = { viewModel.setCameraConnection(cam.camId, true) }
                         )
                     }
                 }
@@ -239,7 +240,8 @@ fun CameraDashboardScreen(
                                             modifier = Modifier.fillMaxSize(),
                                             enablePinchZoom = false,
                                             onSingleTap = { showFullscreenExitHint = !showFullscreenExitHint },
-                                            onDoubleTap = { isFullscreenWall = false }
+                                            onDoubleTap = { isFullscreenWall = false },
+                                            onReconnect = { viewModel.setCameraConnection(cam.camId, true) }
                                         )
                                     }
                                 }
@@ -887,13 +889,14 @@ fun CameraDashboardScreen(
                                     rotationZ = cardRotation
                                     shadowElevation = if (isDragged) 24.dp.toPx() else 0f
                                 },
-                                onOpenDetail = { onOpenCamera(cam) },
                                 onOpenFootageReview = { onOpenFootageReview(cam) },
                                 onToggleMute = { viewModel.toggleMuteExclusive(cam.camId) },
                                 onToggleQuality = {
                                     val next = if (ctrl.telemetry.value.quality != 0) 0 else 1
                                     viewModel.updateCameraQuality(cam.camId, next)
                                 },
+                                onToggleConnection = { viewModel.toggleCameraConnection(cam.camId) },
+                                onReconnect = { viewModel.setCameraConnection(cam.camId, true) },
                                 onEditSettings = { onEditCameraClick(cam) }
                             )
                         }
@@ -911,17 +914,24 @@ private fun CameraTileCard(
     compact: Boolean,
     isDragged: Boolean = false,
     modifier: Modifier = Modifier,
-    onOpenDetail: () -> Unit,
     onOpenFootageReview: () -> Unit = {},
     onToggleMute: () -> Unit,
     onToggleQuality: () -> Unit,
+    onToggleConnection: () -> Unit,
+    onReconnect: () -> Unit,
     onEditSettings: () -> Unit
 ) {
     val telemetry by controller.telemetry.collectAsState()
+    val isDisconnectedState = telemetry.isUserDisconnected || !camera.connectionEnabled
     val borderColor = when {
         isDragged -> Color(0xFF3B82F6)
         telemetry.isConnected -> Color(0xFF27272A)
         else -> Color(0xFF3F3F46)
+    }
+    val statusDotColor = when {
+        telemetry.isConnected -> Color(0xFF10B981)
+        isDisconnectedState -> Color(0xFF71717A)
+        else -> Color(0xFFF59E0B)
     }
 
     Surface(
@@ -936,7 +946,7 @@ private fun CameraTileCard(
         color = if (isDragged) Color(0xFF18181F) else Color(0xFF121215)
     ) {
         Column {
-            // Video Viewport (16:9) - Pure unobstructed video footage
+            // Video Viewport (16:9) - Pure unobstructed video footage or blurred last-seen frame + Reconnect overlay
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -948,26 +958,9 @@ private fun CameraTileCard(
                     modifier = Modifier.fillMaxSize(),
                     enablePinchZoom = false,
                     onSingleTap = null,
-                    onDoubleTap = null
+                    onDoubleTap = null,
+                    onReconnect = onReconnect
                 )
-
-                // Center status message only when connecting / offline
-                if (!telemetry.isConnected) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.Center)
-                            .background(Color(0xCC121215), RoundedCornerShape(8.dp))
-                            .border(1.dp, Color(0xFF27272A), RoundedCornerShape(8.dp))
-                            .padding(horizontal = 12.dp, vertical = 6.dp)
-                    ) {
-                        Text(
-                            text = telemetry.statusText,
-                            color = Color(0xFFD4D4D8),
-                            fontSize = 11.sp,
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                }
             }
 
             // Bottom Control Strip (Camera Name + Telemetry + Controls outside the video)
@@ -995,9 +988,7 @@ private fun CameraTileCard(
                             modifier = Modifier
                                 .size(6.dp)
                                 .clip(CircleShape)
-                                .background(
-                                    if (telemetry.isConnected) Color(0xFF10B981) else Color(0xFFF59E0B)
-                                )
+                                .background(statusDotColor)
                         )
                         Spacer(modifier = Modifier.width(5.dp))
                         Text(
@@ -1013,7 +1004,7 @@ private fun CameraTileCard(
                         )
                     }
 
-                    // Row 2: HD/SD button on left, Mute + Settings + Expand icons on right
+                    // Row 2: HD/SD button on left, Mute + Footage + Settings + Connect/Disconnect icons on right
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -1082,14 +1073,14 @@ private fun CameraTileCard(
                             }
 
                             IconButton(
-                                onClick = onOpenDetail,
+                                onClick = onToggleConnection,
                                 modifier = Modifier.size(24.dp)
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.OpenInFull,
-                                    contentDescription = "PTZ & Fullscreen",
-                                    tint = Color(0xFF60A5FA),
-                                    modifier = Modifier.size(14.dp)
+                                    imageVector = if (camera.connectionEnabled) Icons.Default.Link else Icons.Default.LinkOff,
+                                    contentDescription = if (camera.connectionEnabled) "Disconnect Camera" else "Connect Camera",
+                                    tint = if (camera.connectionEnabled) Color(0xFF60A5FA) else Color(0xFFEF4444),
+                                    modifier = Modifier.size(15.dp)
                                 )
                             }
                         }
@@ -1124,9 +1115,7 @@ private fun CameraTileCard(
                                     modifier = Modifier
                                         .size(7.dp)
                                         .clip(CircleShape)
-                                        .background(
-                                            if (telemetry.isConnected) Color(0xFF10B981) else Color(0xFFF59E0B)
-                                        )
+                                        .background(statusDotColor)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
@@ -1141,16 +1130,16 @@ private fun CameraTileCard(
                                 )
                             }
                             Text(
-                                text = if (telemetry.isConnected) {
-                                    String.format(
+                                text = when {
+                                    telemetry.isConnected -> String.format(
                                         Locale.US,
                                         "%s • %.0f fps • %.0f kbps",
                                         telemetry.codecLabel.ifBlank { "H.264" },
                                         telemetry.fps,
                                         telemetry.kbps
                                     )
-                                } else {
-                                    "${camera.ip}:${camera.port}"
+                                    isDisconnectedState -> "Disconnected • ${camera.ip}:${camera.port}"
+                                    else -> "${camera.ip}:${camera.port}"
                                 },
                                 color = Color(0xFF71717A),
                                 fontSize = 10.sp,
@@ -1247,13 +1236,13 @@ private fun CameraTileCard(
                         }
 
                         IconButton(
-                            onClick = onOpenDetail,
+                            onClick = onToggleConnection,
                             modifier = Modifier.size(30.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.ControlCamera,
-                                contentDescription = "PTZ & Fullscreen",
-                                tint = Color(0xFF60A5FA),
+                                imageVector = if (camera.connectionEnabled) Icons.Default.Link else Icons.Default.LinkOff,
+                                contentDescription = if (camera.connectionEnabled) "Disconnect Camera" else "Connect Camera",
+                                tint = if (camera.connectionEnabled) Color(0xFF60A5FA) else Color(0xFFEF4444),
                                 modifier = Modifier.size(17.dp)
                             )
                         }

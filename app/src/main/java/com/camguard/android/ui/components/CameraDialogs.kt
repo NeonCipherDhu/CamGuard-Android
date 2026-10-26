@@ -314,6 +314,7 @@ fun AddOrEditCameraDialog(
                                     lightMode = initialCamera?.lightMode ?: "auto",
                                     imageMode = initialCamera?.imageMode ?: "auto",
                                     flipped = initialCamera?.flipped ?: false,
+                                    connectionEnabled = initialCamera?.connectionEnabled ?: true,
                                     ptzPresets = initialCamera?.ptzPresets ?: emptyList()
                                 )
                                 onSave(cfg)

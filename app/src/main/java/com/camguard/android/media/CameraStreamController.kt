@@ -1,12 +1,16 @@
 package com.camguard.android.media
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
 import android.media.MediaCodec
 import android.media.MediaFormat
+import android.media.MediaMetadataRetriever
 import android.view.Surface
+import android.view.TextureView
 import com.camguard.android.model.CameraConfig
 import com.camguard.android.protocol.CameraAudioDecoder
 import com.camguard.android.protocol.CameraClient
@@ -21,10 +25,12 @@ import java.nio.ByteOrder
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicBoolean
 
 data class StreamTelemetry(
     val statusText: String = "Idle",
     val isConnected: Boolean = false,
+    val isUserDisconnected: Boolean = false,
     val fps: Float = 0f,
     val kbps: Float = 0f,
     val codecLabel: String = "",
@@ -37,7 +43,8 @@ data class StreamTelemetry(
 )
 
 class CameraStreamController(
-    initialConfig: CameraConfig
+    initialConfig: CameraConfig,
+    private val appContext: Context? = null
 ) {
     @Volatile
     var config: CameraConfig = initialConfig
@@ -45,16 +52,31 @@ class CameraStreamController(
 
     private val _telemetry = MutableStateFlow(
         StreamTelemetry(
-            statusText = "Connecting...",
+            statusText = if (initialConfig.connectionEnabled) "Connecting..." else "Disconnected",
+            isConnected = false,
+            isUserDisconnected = !initialConfig.connectionEnabled,
             quality = initialConfig.quality,
             isMuted = true
         )
     )
     val telemetry: StateFlow<StreamTelemetry> = _telemetry.asStateFlow()
 
+    private val _lastBlurredFrame = MutableStateFlow<Bitmap?>(null)
+    val lastBlurredFrame: StateFlow<Bitmap?> = _lastBlurredFrame.asStateFlow()
+
+    @Volatile
+    internal var attachedTextureView: TextureView? = null
+    private val frameBlurBusy = AtomicBoolean(false)
+    @Volatile
+    private var lastFrameDiskSaveMs: Long = 0L
+
     private var client: CameraClient? = null
     private var workerThread: Thread? = null
     @Volatile private var running = false
+
+    init {
+        loadInitialLastFrameAsync()
+    }
 
     // Video hardware decoder state
     private val videoLock = Any()
@@ -91,6 +113,10 @@ class CameraStreamController(
             lastStatTimeMs = System.currentTimeMillis()
             bytesWindow = 0L
             framesWindow = 0
+            _telemetry.value = _telemetry.value.copy(
+                statusText = "Connecting...",
+                isUserDisconnected = false
+            )
 
             val c = CameraClient(
                 ip = config.ip,
@@ -115,6 +141,29 @@ class CameraStreamController(
     }
 
     fun stop() {
+        tryCaptureFromAttachedTextureView(persistImmediately = true)
+        stopInternal(
+            statusLabel = if (_telemetry.value.isUserDisconnected) "Disconnected" else "Offline",
+            userDisconnected = _telemetry.value.isUserDisconnected
+        )
+    }
+
+    fun disconnectUser() {
+        tryCaptureFromAttachedTextureView(persistImmediately = true)
+        config = config.copy(connectionEnabled = false)
+        stopInternal(statusLabel = "Disconnected", userDisconnected = true)
+    }
+
+    fun updateConfig(newConfig: CameraConfig) {
+        config = newConfig
+        if (newConfig.connectionEnabled) {
+            reconnect(newConfig)
+        } else {
+            disconnectUser()
+        }
+    }
+
+    private fun stopInternal(statusLabel: String, userDisconnected: Boolean) {
         synchronized(this) {
             running = false
             client?.stop()
@@ -133,13 +182,109 @@ class CameraStreamController(
             releaseAudioUnlocked()
         }
         _telemetry.value = _telemetry.value.copy(
-            statusText = "Offline",
+            statusText = statusLabel,
             isConnected = false,
+            isUserDisconnected = userDisconnected,
             fps = 0f,
             kbps = 0f,
             audioLevel = 0f,
             isRecording = false
         )
+    }
+
+    fun tryCaptureFromAttachedTextureView(persistImmediately: Boolean = false) {
+        val tv = attachedTextureView ?: return
+        if (!seenKeyframe && !_telemetry.value.isConnected) return
+        try {
+            val bmp = tv.getBitmap(320, 180)
+            if (bmp != null) {
+                onLiveFrameCaptured(bmp, persistImmediately = persistImmediately)
+            }
+        } catch (_: Exception) {
+        }
+    }
+
+    fun onLiveFrameCaptured(rawBitmap: Bitmap, persistImmediately: Boolean = false) {
+        if (!persistImmediately && !frameBlurBusy.compareAndSet(false, true)) {
+            return
+        }
+        Thread({
+            try {
+                val scaled = if (rawBitmap.width != 320 || rawBitmap.height != 180) {
+                    Bitmap.createScaledBitmap(rawBitmap, 320, 180, true)
+                } else {
+                    rawBitmap
+                }
+                val blurred = fastBlurBitmap(scaled, radius = 10)
+                _lastBlurredFrame.value = blurred
+
+                val now = System.currentTimeMillis()
+                val ctx = appContext
+                if (ctx != null && (persistImmediately || now - lastFrameDiskSaveMs >= 4000L)) {
+                    lastFrameDiskSaveMs = now
+                    val outFile = getLastFrameCacheFile(ctx, config.camId)
+                    outFile.outputStream().use { out ->
+                        scaled.compress(Bitmap.CompressFormat.JPEG, 85, out)
+                    }
+                }
+            } catch (_: Exception) {
+            } finally {
+                frameBlurBusy.set(false)
+            }
+        }, "FrameBlur-${config.camId}").apply {
+            isDaemon = true
+            start()
+        }
+    }
+
+    private fun loadInitialLastFrameAsync() {
+        val ctx = appContext ?: return
+        Thread({
+            try {
+                var rawBmp: Bitmap? = null
+                val cacheFile = getLastFrameCacheFile(ctx, config.camId)
+                if (cacheFile.exists() && cacheFile.length() > 0L) {
+                    rawBmp = BitmapFactory.decodeFile(cacheFile.absolutePath)
+                }
+                if (rawBmp == null) {
+                    val capturesDir = FootageBackupStore.getLocalCapturesRoot(ctx, config)
+                    val files = capturesDir.listFiles()
+                        ?.filter { it.isFile && (it.name.endsWith(".jpg", true) || it.name.endsWith(".mp4", true)) }
+                        ?.sortedByDescending { it.lastModified() }
+                        .orEmpty()
+                    for (f in files) {
+                        if (f.name.endsWith(".jpg", true)) {
+                            rawBmp = BitmapFactory.decodeFile(f.absolutePath)
+                        } else if (f.name.endsWith(".mp4", true)) {
+                            val retriever = MediaMetadataRetriever()
+                            try {
+                                retriever.setDataSource(f.absolutePath)
+                                rawBmp = retriever.getFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                            } catch (_: Exception) {
+                            } finally {
+                                try { retriever.release() } catch (_: Exception) {}
+                            }
+                        }
+                        if (rawBmp != null) break
+                    }
+                }
+                if (rawBmp != null && _lastBlurredFrame.value == null) {
+                    val scaled = Bitmap.createScaledBitmap(rawBmp, 320, 180, true)
+                    _lastBlurredFrame.value = fastBlurBitmap(scaled, radius = 10)
+                }
+            } catch (_: Exception) {
+            }
+        }, "InitFrameLoad-${config.camId}").apply {
+            isDaemon = true
+            start()
+        }
+    }
+
+    private fun getLastFrameCacheFile(context: Context, camId: String): File {
+        val dir = File(context.filesDir, "last_frames")
+        if (!dir.exists()) dir.mkdirs()
+        val safeId = camId.replace(Regex("[^a-zA-Z0-9_-]"), "_")
+        return File(dir, "last_frame_$safeId.jpg")
     }
 
     fun startLiveRecording(context: Context): String? {
@@ -199,9 +344,10 @@ class CameraStreamController(
 
     fun reconnect(newConfig: CameraConfig = config) {
         stop()
-        config = newConfig
+        config = newConfig.copy(connectionEnabled = true)
         _telemetry.value = _telemetry.value.copy(
             statusText = "Reconnecting...",
+            isUserDisconnected = false,
             quality = newConfig.quality
         )
         start()
@@ -334,6 +480,7 @@ class CameraStreamController(
     }
 
     private fun handleStatus(msg: String) {
+        if (!running) return
         val connected = msg.startsWith("Streaming")
         if (connected) {
             lastStatTimeMs = System.currentTimeMillis()
@@ -348,6 +495,7 @@ class CameraStreamController(
         _telemetry.value = _telemetry.value.copy(
             statusText = msg,
             isConnected = connected,
+            isUserDisconnected = false,
             width = c?.frameWidth ?: _telemetry.value.width,
             height = c?.frameHeight ?: _telemetry.value.height
         )
@@ -654,5 +802,75 @@ class CameraStreamController(
                 height = c?.frameHeight ?: _telemetry.value.height
             )
         }
+    }
+
+    private fun fastBlurBitmap(src: Bitmap, radius: Int): Bitmap {
+        val w = src.width
+        val h = src.height
+        if (w <= 0 || h <= 0 || radius <= 0) return src
+        val pixels = IntArray(w * h)
+        val tmp = IntArray(w * h)
+        src.getPixels(pixels, 0, w, 0, 0, w, h)
+        val r = radius.coerceIn(1, minOf(w, h) / 2)
+        val div = 2 * r + 1
+
+        // 3-pass separable sliding-window box blur (approximates Gaussian blur in O(w*h))
+        repeat(3) {
+            // Horizontal pass: pixels -> tmp
+            for (y in 0 until h) {
+                val rowOffset = y * w
+                var rSum = 0
+                var gSum = 0
+                var bSum = 0
+                for (i in -r..r) {
+                    val p = pixels[rowOffset + i.coerceIn(0, w - 1)]
+                    rSum += (p ushr 16) and 0xFF
+                    gSum += (p ushr 8) and 0xFF
+                    bSum += p and 0xFF
+                }
+                for (x in 0 until w) {
+                    tmp[rowOffset + x] = (0xFF shl 24) or
+                        ((rSum / div) shl 16) or
+                        ((gSum / div) shl 8) or
+                        (bSum / div)
+                    val outIdx = (x - r).coerceIn(0, w - 1)
+                    val inIdx = (x + r + 1).coerceIn(0, w - 1)
+                    val pOut = pixels[rowOffset + outIdx]
+                    val pIn = pixels[rowOffset + inIdx]
+                    rSum += ((pIn ushr 16) and 0xFF) - ((pOut ushr 16) and 0xFF)
+                    gSum += ((pIn ushr 8) and 0xFF) - ((pOut ushr 8) and 0xFF)
+                    bSum += (pIn and 0xFF) - (pOut and 0xFF)
+                }
+            }
+            // Vertical pass: tmp -> pixels
+            for (x in 0 until w) {
+                var rSum = 0
+                var gSum = 0
+                var bSum = 0
+                for (i in -r..r) {
+                    val p = tmp[i.coerceIn(0, h - 1) * w + x]
+                    rSum += (p ushr 16) and 0xFF
+                    gSum += (p ushr 8) and 0xFF
+                    bSum += p and 0xFF
+                }
+                for (y in 0 until h) {
+                    pixels[y * w + x] = (0xFF shl 24) or
+                        ((rSum / div) shl 16) or
+                        ((gSum / div) shl 8) or
+                        (bSum / div)
+                    val outIdx = (y - r).coerceIn(0, h - 1)
+                    val inIdx = (y + r + 1).coerceIn(0, h - 1)
+                    val pOut = tmp[outIdx * w + x]
+                    val pIn = tmp[inIdx * w + x]
+                    rSum += ((pIn ushr 16) and 0xFF) - ((pOut ushr 16) and 0xFF)
+                    gSum += ((pIn ushr 8) and 0xFF) - ((pOut ushr 8) and 0xFF)
+                    bSum += (pIn and 0xFF) - (pOut and 0xFF)
+                }
+            }
+        }
+
+        val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        out.setPixels(pixels, 0, w, 0, 0, w, h)
+        return out
     }
 }

@@ -47,7 +47,12 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         val saved = repo.loadCameras()
         _cameras.value = saved
         saved.forEach { cfg ->
-            getOrCreateController(cfg).start()
+            val ctrl = getOrCreateController(cfg)
+            if (cfg.connectionEnabled) {
+                ctrl.start()
+            } else {
+                ctrl.disconnectUser()
+            }
         }
     }
 
@@ -55,7 +60,10 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         synchronized(controllers) {
             val existing = controllers[config.camId]
             if (existing != null) return existing
-            val created = CameraStreamController(config)
+            val created = CameraStreamController(
+                initialConfig = config,
+                appContext = getApplication<Application>().applicationContext
+            )
             controllers[config.camId] = created
             return created
         }
@@ -82,9 +90,9 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
                 }
             }
         } else if (prevId != null) {
-            // Resume live stream when leaving Footage Review
+            // Resume live stream when leaving Footage Review only if camera is in Connect state
             val cam = _cameras.value.find { it.camId == prevId }
-            if (cam != null) {
+            if (cam != null && cam.connectionEnabled) {
                 val ctrl = getOrCreateController(cam)
                 Thread { ctrl.reconnect(cam) }.apply { isDaemon = true }.start()
             }
@@ -127,7 +135,27 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         repo.saveCustomName(config.camId, config.deviceId, config.ip, config.name)
 
         val ctrl = getOrCreateController(config)
-        ctrl.reconnect(config)
+        ctrl.updateConfig(config)
+    }
+
+    fun toggleCameraConnection(camId: String) {
+        val cam = _cameras.value.find { it.camId == camId } ?: return
+        setCameraConnection(camId, !cam.connectionEnabled)
+    }
+
+    fun setCameraConnection(camId: String, enabled: Boolean) {
+        val updated = _cameras.value.map { cam ->
+            if (cam.camId == camId) cam.copy(connectionEnabled = enabled) else cam
+        }
+        _cameras.value = updated
+        repo.saveCameras(updated)
+        val targetCam = updated.find { it.camId == camId } ?: return
+        val ctrl = getOrCreateController(targetCam)
+        if (enabled) {
+            ctrl.reconnect(targetCam)
+        } else {
+            ctrl.disconnectUser()
+        }
     }
 
     fun deleteCamera(camId: String) {
@@ -147,7 +175,7 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun reconnectAll() {
-        _cameras.value.forEach { cfg ->
+        _cameras.value.filter { it.connectionEnabled }.forEach { cfg ->
             getOrCreateController(cfg).reconnect(cfg)
         }
     }
@@ -314,7 +342,12 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
             deviceId = disc.devId,
             username = username,
             password = password,
-            quality = quality
+            quality = quality,
+            lightMode = existing?.lightMode ?: "auto",
+            imageMode = existing?.imageMode ?: "auto",
+            flipped = existing?.flipped ?: false,
+            connectionEnabled = existing?.connectionEnabled ?: true,
+            ptzPresets = existing?.ptzPresets ?: emptyList()
         )
         addOrUpdateCamera(cfg)
     }
