@@ -881,9 +881,6 @@ private fun StreamStatusBadgeRow(
         return
     }
 
-    val isHd = telemetry.quality != 0
-    val qLabel = if (isHd) "HD" else "SD"
-    val codec = telemetry.codecLabel.ifBlank { "H.264" }
     val fpsStr = String.format(Locale.US, "%.0f fps", telemetry.fps)
     val kbpsStr = String.format(Locale.US, "%.0f kbps", telemetry.kbps)
 
@@ -912,27 +909,6 @@ private fun StreamStatusBadgeRow(
                 color = Color(0xFFA7F3D0),
                 fontSize = 9.sp,
                 fontWeight = FontWeight.Bold
-            )
-        }
-
-        // Quality + Codec pill
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(4.dp))
-                .background(if (isHd) Color(0xFF172554) else Color(0xFF1F1F25))
-                .border(
-                    1.dp,
-                    if (isHd) Color(0xFF3B82F6) else Color(0xFF3F3F46),
-                    RoundedCornerShape(4.dp)
-                )
-                .padding(horizontal = 5.dp, vertical = 1.5.dp)
-        ) {
-            Text(
-                text = "$qLabel $codec",
-                color = if (isHd) Color(0xFFBFDBFE) else Color(0xFFD4D4D8),
-                fontSize = 9.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1
             )
         }
 
