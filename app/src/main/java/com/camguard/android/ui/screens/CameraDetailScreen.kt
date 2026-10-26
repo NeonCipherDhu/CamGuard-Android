@@ -415,9 +415,6 @@ fun CameraDetailScreen(
                             tint = if (camera.connectionEnabled) Color(0xFF60A5FA) else Color(0xFFEF4444)
                         )
                     }
-                    IconButton(onClick = onOpenFootageReview) {
-                        Icon(Icons.Default.SdCard, contentDescription = "Footage Review", tint = Color(0xFF60A5FA))
-                    }
                     IconButton(onClick = { viewModel.setCameraConnection(camera.camId, true) }) {
                         Icon(Icons.Default.Refresh, contentDescription = "Reconnect", tint = Color(0xFFA1A1AA))
                     }
@@ -503,10 +500,10 @@ fun CameraDetailScreen(
                     }
                 )
 
-                // Snapshot
+                // Snapshot (icon-only)
                 ActionPillButton(
                     icon = Icons.Default.CameraAlt,
-                    label = "Snap",
+                    contentDesc = "Snapshot",
                     active = false,
                     onClick = {
                         val file = videoHandle.captureSnapshotToGallery(context, camera.name, camera)
@@ -518,11 +515,12 @@ fun CameraDetailScreen(
                     }
                 )
 
-                // Live Record (.MP4 into Local Captures)
+                // Live Record (.MP4 into Local Captures, icon-only)
                 ActionPillButton(
                     icon = if (telemetry.isRecording) Icons.Default.Stop else Icons.Default.FiberManualRecord,
-                    label = if (telemetry.isRecording) "Stop REC" else "REC",
+                    contentDesc = if (telemetry.isRecording) "Stop Recording" else "Record",
                     active = telemetry.isRecording,
+                    iconTint = if (telemetry.isRecording) Color(0xFF34D399) else Color(0xFFEF4444),
                     onClick = {
                         if (telemetry.isRecording) {
                             val saved = controller.stopLiveRecording(context)
@@ -542,18 +540,19 @@ fun CameraDetailScreen(
                     }
                 )
 
-                // Footage Review (SD Card & Local Captures)
+                // Footage Review (SD Card & Local Captures, icon-only)
                 ActionPillButton(
                     icon = Icons.Default.SdCard,
-                    label = "Footage",
+                    contentDesc = "Footage Review",
                     active = false,
+                    iconTint = Color(0xFF34D399),
                     onClick = onOpenFootageReview
                 )
 
-                // Fullscreen Landscape
+                // Fullscreen Landscape (icon-only)
                 ActionPillButton(
                     icon = Icons.Default.Fullscreen,
-                    label = "Full",
+                    contentDesc = "Fullscreen",
                     active = false,
                     onClick = {
                         activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
@@ -1088,11 +1087,12 @@ fun QualityBadgeButton(
 @Composable
 private fun ActionPillButton(
     icon: ImageVector,
-    label: String,
+    contentDesc: String,
     active: Boolean,
+    iconTint: Color? = null,
     onClick: () -> Unit
 ) {
-    Row(
+    Box(
         modifier = Modifier
             .clip(RoundedCornerShape(8.dp))
             .background(if (active) Color(0xFF065F46) else Color(0xFF18181B))
@@ -1102,23 +1102,14 @@ private fun ActionPillButton(
                 RoundedCornerShape(8.dp)
             )
             .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        contentAlignment = Alignment.Center
     ) {
         Icon(
             icon,
-            contentDescription = label,
-            tint = if (active) Color(0xFF34D399) else Color(0xFFD4D4D8),
-            modifier = Modifier.size(16.dp)
-        )
-        Spacer(modifier = Modifier.width(5.dp))
-        Text(
-            text = label,
-            color = if (active) Color(0xFFD1FAE5) else Color(0xFFD4D4D8),
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            contentDescription = contentDesc,
+            tint = iconTint ?: if (active) Color(0xFF34D399) else Color(0xFFD4D4D8),
+            modifier = Modifier.size(18.dp)
         )
     }
 }
